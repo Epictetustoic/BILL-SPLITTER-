@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bill Splitter</title>
+<style>
+:root{--bg:#faf8f5;--card:#fff;--ink:#1f1d1a;--mute:#76706a;--line:#e6e1da;--acc:#d9531e;--accsoft:#fde9df;--ok:#2f7d4f;--warn:#b4690e;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171513;--card:#211e1b;--ink:#f1ede7;--mute:#a09992;--line:#37322d;--acc:#f07a47;--accsoft:#3a2418;--ok:#6cc58f;--warn:#e8a64a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171513;--card:#211e1b;--ink:#f1ede7;--mute:#a09992;--line:#37322d;--acc:#f07a47;--accsoft:#3a2418;--ok:#6cc58f;--warn:#e8a64a;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.5rem;margin:8px 0 2px}
+.sub{color:var(--mute);margin:0 0 16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 10px}
+input,select,button{font:inherit;color:inherit}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0}
+input:focus,select:focus{outline:2px solid var(--acc);outline-offset:1px}
+button{cursor:pointer;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.row{display:flex;gap:8px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border-radius:999px;padding:5px 12px;font-size:.9rem}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.chip.x{background:var(--accsoft);border-color:transparent}
+.item{border-top:1px solid var(--line);padding:10px 0}
+.item:first-child{border-top:0;padding-top:0}
+.item .row input.n{flex:1}
+.item .row input.p{width:92px;text-align:right}
+.del{padding:6px 10px;color:var(--mute)}
+#photoWrap{display:none;margin-bottom:10px}
+#photoWrap img{max-width:100%;max-height:260px;border-radius:10px;display:block;margin:0 auto;border:1px solid var(--line)}
+.hint{color:var(--mute);font-size:.85rem;margin:6px 0 0}
+.warn{color:var(--warn);font-size:.9rem;margin:8px 0 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:4px}
+label input,label select{width:100%}
+.person{display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-top:1px solid var(--line)}
+.person:first-of-type{border-top:0}
+.person b{font-size:1.15rem}
+.person small{color:var(--mute);display:block}
+.tot{display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:2px solid var(--line);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<h1>Bill Splitter</h1>
+<p class="sub">Snap the bill, tag who ate what, split with tax and tip.</p>
+
+<section>
+<h2>1 · Bill photo</h2>
+<div id="photoWrap"><img id="photo" alt="Your bill"></div>
+<label class="row" style="margin:0"><input id="file" type="file" accept="image/*" capture="environment" style="flex:1"></label>
+<div id="scanwrap" style="display:none;margin-top:10px"><button class="pri" id="scan" disabled>✨ Read items from photo</button><p class="hint" id="scanmsg">Claude reads the bill and fills in items and tax. Check them against the photo.</p></div>
+<p class="hint">You can always add or fix items by hand below.</p>
+</section>
+
+<section>
+<h2>2 · Who’s eating</h2>
+<div class="row"><input id="pname" placeholder="Add a name" style="flex:1" maxlength="20"><button class="pri" id="addP">Add</button></div>
+<div class="chips" id="people" style="margin-top:10px"></div>
+</section>
+
+<section>
+<h2>3 · Items</h2>
+<div id="items"></div>
+<button id="addI" style="margin-top:10px">+ Add item</button>
+<p class="hint">Tap names under an item to tag who shared it. Several people = split evenly.</p>
+<p class="warn" id="unassigned"></p>
+</section>
+
+<section>
+<h2>4 · Tax and tip</h2>
+<div class="grid">
+<label>Currency<select id="cur"><option>$</option><option>₹</option><option>€</option><option>£</option></select></label>
+<label>Tax (amount on bill)<input id="tax" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label>
+</div>
+<label style="margin-top:10px">Tip</label>
+<div class="chips" id="tips"></div>
+<div class="row" style="margin-top:8px"><input id="tipc" type="number" inputmode="decimal" min="0" step="0.5" placeholder="Custom %" style="width:120px"></div>
+</section>
+
+<section>
+<h2>Everyone owes</h2>
+<div id="out"></div>
+</section>
+</main>
+
+<script>
+(function(){
+var S={people:[],items:[],tip:15},uid=0;
+var $=function(i){return document.getElementById(i)};
+var cur=function(){return $('cur').value};
+var billFile=null,sampleFn=null;
+$('file').addEventListener('change',function(e){billFile=e.target.files[0]||null;$('scan').disabled=!billFile;$('scanmsg').textContent='Claude reads the bill and fills in items and tax. Check them against the photo.'});
+try{if(window.claude&&claude.use){claude.use('sample').then(function(s){if(s){sampleFn=s;$('scanwrap').style.display='block'}}).catch(function(){})}}catch(_){}
+$('scan').addEventListener('click',async function(){
+ var msg=$('scanmsg');if(!billFile||!sampleFn)return;
+ $('scan').disabled=true;msg.textContent='Reading your bill…';
+ try{
+  var lim=await sampleFn.limits();
+  if(!lim||!lim.images){msg.textContent='Photo reading isn’t available here, so add items by hand.';return}
+  var r=await sampleFn.json('Read this restaurant bill photo. Reply with ONLY JSON in this shape: {"items":[{"name":string,"price":number}],"tax":number}. Each price is the line total (quantity × unit price). Leave out subtotal, total, tip and discount lines. Put the sum of all taxes (GST, VAT, sales tax) in tax, or 0 if none.',{images:[billFile],modelTier:'default'});
+  var list=(r&&r.items)||[],n=0;
+  S.items=S.items.filter(function(it){return it.name||it.price});
+  list.forEach(function(x){var p=Number(x.price);if(!x||isNaN(p))return;S.items.push({id:++uid,name:String(x.name||'Item'),price:String(p),who:[]});n++});
+  if(r&&Number(r.tax)>0)$('tax').value=String(Number(r.tax));
+  renderItems();calc();
+  msg.textContent=n?('Found '+n+' items. Check them against the photo, then tag who ate what.'):'Couldn’t find any items. Try a clearer photo or add them by hand.';
+ }catch(e){
+  var c=e&&e.code;
+  msg.textContent=c==='not_granted'?'Permission to use Claude was declined. Add items by hand.':c==='image_rejected'?'Couldn’t read that image. Try a clearer photo.':c==='rate_limited'?'Too many requests. Try again shortly.':'Couldn’t read the bill. Try again or add items by hand.';
+ }finally{$('scan').disabled=!billFile}
+});
+var money=function(n){return cur()+(Math.round(n*100)/100).toFixed(2)};
+var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+
+$('file').addEventListener('change',function(e){
+ var f=e.target.files[0];if(!f)return;
+ var r=new FileReader();
+ r.onload=function(){$('photo').src=r.result;$('photoWrap').style.display='block'};
+ r.readAsDataURL(f);
+});
+
+function addPerson(){
+ var v=$('pname').value.trim();
+ if(!v||S.people.some(function(p){return p.name.toLowerCase()===v.toLowerCase()}))return;
+ S.people.push({id:++uid,name:v});$('pname').value='';
+ renderPeople();renderItems();calc();
+}
+$('addP').onclick=addPerson;
+$('pname').addEventListener('keydown',function(e){if(e.key==='Enter')addPerson()});
+
+function renderPeople(){
+ $('people').innerHTML=S.people.length?S.people.map(function(p){
+  return '<button class="chip x" data-rm="'+p.id+'" title="Remove">'+esc(p.name)+' ✕</button>';
+ }).join(''):'<span class="hint">Add at least one person.</span>';
+}
+$('people').addEventListener('click',function(e){
+ var b=e.target.closest('[data-rm]');if(!b)return;
+ var id=+b.dataset.rm;
+ S.people=S.people.filter(function(p){return p.id!==id});
+ S.items.forEach(function(it){it.who=it.who.filter(function(w){return w!==id})});
+ renderPeople();renderItems();calc();
+});
+
+$('addI').onclick=function(){S.items.push({id:++uid,name:'',price:'',who:[]});renderItems();calc()};
+
+function renderItems(){
+ if(!S.items.length){$('items').innerHTML='<p class="hint" style="margin:0">No items yet.</p>';return}
+ $('items').innerHTML=S.items.map(function(it){
+  var tags=S.people.map(function(p){
+   return '<button class="chip'+(it.who.indexOf(p.id)>-1?' on':'')+'" data-tag="'+it.id+':'+p.id+'">'+esc(p.name)+'</button>';
+  }).join('');
+  return '<div class="item" data-id="'+it.id+'"><div class="row">'+
+   '<input class="n" placeholder="Item" value="'+esc(it.name)+'">'+
+   '<input class="p" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" value="'+esc(it.price)+'">'+
+   '<button class="del" data-del="'+it.id+'" title="Delete">✕</button></div>'+
+   '<div class="chips" style="margin-top:8px">'+(tags||'<span class="hint">Add people first.</span>')+
+   (S.people.length>1?'<button class="chip" data-all="'+it.id+'">Everyone</button>':'')+'</div></div>';
+ }).join('');
+}
+$('items').addEventListener('input',function(e){
+ var box=e.target.closest('.item');if(!box)return;
+ var it=S.items.find(function(x){return x.id===+box.dataset.id});
+ if(e.target.classList.contains('n'))it.name=e.target.value;
+ if(e.target.classList.contains('p'))it.price=e.target.value;
+ calc();
+});
+$('items').addEventListener('click',function(e){
+ var t=e.target.closest('[data-tag]'),d=e.target.closest('[data-del]'),a=e.target.closest('[data-all]');
+ if(t){
+  var parts=t.dataset.tag.split(':').map(Number),it=S.items.find(function(x){return x.id===parts[0]});
+  var i=it.who.indexOf(parts[1]);
+  if(i>-1)it.who.splice(i,1);else it.who.push(parts[1]);
+ }else if(d){
+  S.items=S.items.filter(function(x){return x.id!==+d.dataset.del});
+ }else if(a){
+  var it2=S.items.find(function(x){return x.id===+a.dataset.all});
+  it2.who=S.people.map(function(p){return p.id});
+ }else return;
+ renderItems();calc();
+});
+
+function renderTips(){
+ $('tips').innerHTML=[0,10,15,18,20].map(function(v){
+  return '<button class="chip'+(S.tip===v?' on':'')+'" data-tip="'+v+'">'+v+'%</button>';
+ }).join('');
+}
+$('tips').addEventListener('click',function(e){
+ var b=e.target.closest('[data-tip]');if(!b)return;
+ S.tip=+b.dataset.tip;$('tipc').value='';renderTips();calc();
+});
+$('tipc').addEventListener('input',function(){
+ var v=parseFloat($('tipc').value);
+ S.tip=isNaN(v)?0:v;renderTips();calc();
+});
+$('tax').addEventListener('input',calc);
+$('cur').addEventListener('change',calc);
+
+function calc(){
+ var tax=parseFloat($('tax').value)||0;
+ var sub={},assigned=0,unassigned=0,total=0;
+ S.people.forEach(function(p){sub[p.id]=0});
+ S.items.forEach(function(it){
+  var price=parseFloat(it.price)||0;total+=price;
+  var w=it.who.filter(function(id){return id in sub});
+  if(!w.length){unassigned+=price;return}
+  assigned+=price;
+  w.forEach(function(id){sub[id]+=price/w.length});
+ });
+ $('unassigned').textContent=unassigned>0?money(unassigned)+' of items isn’t tagged to anyone yet.':'';
+ if(!S.people.length){$('out').innerHTML='<p class="hint" style="margin:0">Add people and items to see the split.</p>';return}
+ var tipAmt=assigned*S.tip/100,grand=0;
+ var html=S.people.map(function(p){
+  var share=assigned>0?sub[p.id]/assigned:0;
+  var tx=tax*share,tp=tipAmt*share,sum=sub[p.id]+tx+tp;grand+=sum;
+  return '<div class="person"><div><b>'+esc(p.name)+'</b><small>Items '+money(sub[p.id])+' · tax '+money(tx)+' · tip '+money(tp)+'</small></div><b>'+money(sum)+'</b></div>';
+ }).join('');
+ html+='<div class="tot"><span>Total</span><span>'+money(grand)+'</span></div>';
+ $('out').innerHTML=html;
+}
+
+renderPeople();renderItems();renderTips();calc();
+})();
+</script>
+</body>
+</html>
